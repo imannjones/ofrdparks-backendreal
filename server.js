@@ -101,4 +101,3 @@ app.get('/current-conditions', (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-

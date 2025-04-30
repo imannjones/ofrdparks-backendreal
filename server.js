@@ -25,7 +25,7 @@ let conditions = {};
 async function updateConditions() {
   for (const park of parks) {
     try {
-      const weather = await axios.get('https://api.openweathermap.org/data/2.5/onecall', {
+      const weather = await axios.get('https://api.openweathermap.org/data/2.5/forecast', {
         params: {
           lat: park.lat,
           lon: park.lon,

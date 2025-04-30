@@ -6,7 +6,8 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 
-const API_KEY = process.env.OPENWEATHER_API_KEY;
+const API_KEY = process.env.OPENWEATHER_API_KEY; 
+console.log("Loaded API Key: ", API_key);
 
 const parks = [
   { name: "Hawk Pride Mountain Offroad Park", lat: 34.6727, lon: -87.8203 },

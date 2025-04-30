@@ -1,4 +1,3 @@
-
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
@@ -25,7 +24,7 @@ let conditions = {};
 async function updateConditions() {
   for (const park of parks) {
     try {
-      const weather = await axios.get('https://api.openweathermap.org/data/3.0/onecall', {
+      const weather = await axios.get('https://api.openweathermap.org/data/2.5/onecall', {
         params: {
           lat: park.lat,
           lon: park.lon,
@@ -35,52 +34,51 @@ async function updateConditions() {
         }
       });
 
-      const hourly = weather.data.hourly;
-      const daily = weather.data.daily;
+      const { hourly, daily, timezone_offset } = weather.data;
 
       let totalWeeklyRain = 0;
       let daysSinceRain = 0;
-      if (daily) {
-        for (let i = 0; i < 7; i++) {
-          const day = daily[i];
-          totalWeeklyRain += day.rain || 0;
-          if ((day.rain || 0) === 0) daysSinceRain++;
-          else daysSinceRain = 0;
-        }
+      for (let i = 0; i < Math.min(7, daily.length); i++) {
+        const rain = daily[i].rain || 0;
+        totalWeeklyRain += rain;
+        if (rain === 0) daysSinceRain++;
+        else daysSinceRain = 0;
       }
 
       let recentRain = 0;
       let lastRainHoursAgo = 'Over 48 hours ago';
-      if (hourly && hourly.length > 0) {
-        for (let i = 0; i < Math.min(6, hourly.length); i++) {
-          recentRain += hourly[i].rain?.['1h'] || 0;
-        }
-
-        for (let i = 0; i < hourly.length; i++) {
-          if (hourly[i].rain && hourly[i].rain['1h'] > 0) {
-            lastRainHoursAgo = i + ' hours ago';
-            break;
-          }
+      for (let i = 0; i < Math.min(6, hourly.length); i++) {
+        recentRain += hourly[i].rain?.['1h'] || 0;
+      }
+      for (let i = 0; i < hourly.length; i++) {
+        if (hourly[i].rain?.['1h']) {
+          lastRainHoursAgo = `${i} hours ago`;
+          break;
         }
       }
 
-      const todayHigh = daily?.[0]?.temp?.max || 'Unknown';
-      const todayLow = daily?.[0]?.temp?.min || 'Unknown';
+      const todayHigh = daily?.[0]?.temp?.max ?? 'Unknown';
+      const todayLow = daily?.[0]?.temp?.min ?? 'Unknown';
 
-      const mudLevel = Math.min(Math.round((totalWeeklyRain / 7) * 10), 10);
+      const mudFactor = Math.min(totalWeeklyRain + (recentRain * 2), 5);
+      const dryFactor = Math.min(daysSinceRain * 1.5, 5);
+      const trailConditionScore = Math.round(mudFactor - dryFactor + 5);
 
-      const windSpeed = hourly[0].wind_speed;
-      const dustFactor = ((daysSinceRain / 7) * 0.7) + ((windSpeed / 30) * 0.3);
-      const dustLevel = Math.min(Math.round(dustFactor * 5), 10);
+      const trailConditionText =
+        trailConditionScore >= 8 ? "Very Muddy" :
+        trailConditionScore >= 6 ? "Muddy" :
+        trailConditionScore >= 4 ? "Moderate" :
+        trailConditionScore >= 2 ? "Dry" :
+        "Very Dusty";
 
       conditions[park.name] = {
         totalWeeklyRain: totalWeeklyRain.toFixed(2) + ' in',
         recentRain: recentRain.toFixed(2) + ' in (last 6h)',
         todayHigh: todayHigh + '°F',
         todayLow: todayLow + '°F',
-        mudLevel,
-        dustLevel,
         lastRainHoursAgo,
+        trailConditionScore,
+        trailConditionText,
         lastUpdated: new Date().toISOString()
       };
 
@@ -95,10 +93,11 @@ async function updateConditions() {
 }
 
 updateConditions();
-setInterval(updateConditions, 12 * 60 * 60 * 1000);
+setInterval(updateConditions, 5 * 60 * 60 * 1000); // every 5 hours
 
 app.get('/current-conditions', (req, res) => {
   res.json(conditions);
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+

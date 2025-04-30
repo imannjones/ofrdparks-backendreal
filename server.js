@@ -79,6 +79,7 @@ async function updateConditions() {
         lastRainForecast: lastRainHoursAgo,
         trailConditionScore,
         trailConditionText,
+        conditionColor: trailConditionScore >= 8 ? "#8B0000" : trailConditionScore >= 6 ? "#FF4500" : trailConditionScore >= 4 ? "#FFA500" : trailConditionScore >= 2 ? "#9ACD32" : "#32CD32",
         lastUpdated: new Date().toISOString()
       };
 
@@ -100,3 +101,4 @@ app.get('/current-conditions', (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+

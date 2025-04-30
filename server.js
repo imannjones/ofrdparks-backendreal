@@ -25,44 +25,43 @@ let conditions = {};
 async function updateConditions() {
   for (const park of parks) {
     try {
-      const weather = await axios.get('https://api.openweathermap.org/data/2.5/forecast', {
+      const response = await axios.get('https://api.openweathermap.org/data/2.5/forecast', {
         params: {
           lat: park.lat,
           lon: park.lon,
           appid: API_KEY,
-          units: 'imperial',
-          exclude: 'minutely,alerts'
+          units: 'imperial'
         }
       });
 
-      const { hourly, daily, timezone_offset } = weather.data;
-
-      let totalWeeklyRain = 0;
-      let daysSinceRain = 0;
-      for (let i = 0; i < Math.min(7, daily.length); i++) {
-        const rain = daily[i].rain || 0;
-        totalWeeklyRain += rain;
-        if (rain === 0) daysSinceRain++;
-        else daysSinceRain = 0;
+      const forecastList = response.data?.list;
+      if (!forecastList || !Array.isArray(forecastList)) {
+        throw new Error(`Invalid response from OpenWeather API for ${park.name}`);
       }
 
+      let totalRain = 0;
       let recentRain = 0;
       let lastRainHoursAgo = 'Over 48 hours ago';
-      for (let i = 0; i < Math.min(6, hourly.length); i++) {
-        recentRain += hourly[i].rain?.['1h'] || 0;
-      }
-      for (let i = 0; i < hourly.length; i++) {
-        if (hourly[i].rain?.['1h']) {
-          lastRainHoursAgo = `${i} hours ago`;
-          break;
+
+      for (let i = 0; i < forecastList.length; i++) {
+        const entry = forecastList[i];
+        const rain = entry.rain?.['3h'] || 0;
+        totalRain += rain;
+
+        if (i < 2) recentRain += rain;
+
+        if (rain > 0 && lastRainHoursAgo === 'Over 48 hours ago') {
+          lastRainHoursAgo = `${i * 3} hours from now`;
         }
       }
 
-      const todayHigh = daily?.[0]?.temp?.max ?? 'Unknown';
-      const todayLow = daily?.[0]?.temp?.min ?? 'Unknown';
+      const todayTemps = forecastList.slice(0, 8);
+      const temps = todayTemps.map(e => e.main.temp);
+      const todayHigh = Math.max(...temps).toFixed(1);
+      const todayLow = Math.min(...temps).toFixed(1);
 
-      const mudFactor = Math.min(totalWeeklyRain + (recentRain * 2), 5);
-      const dryFactor = Math.min(daysSinceRain * 1.5, 5);
+      const mudFactor = Math.min(totalRain + (recentRain * 2), 5);
+      const dryFactor = 0;
       const trailConditionScore = Math.round(mudFactor - dryFactor + 5);
 
       const trailConditionText =
@@ -73,11 +72,11 @@ async function updateConditions() {
         "Very Dusty";
 
       conditions[park.name] = {
-        totalWeeklyRain: totalWeeklyRain.toFixed(2) + ' in',
-        recentRain: recentRain.toFixed(2) + ' in (last 6h)',
+        totalRain: totalRain.toFixed(2) + ' in (5-day)',
+        recentRain: recentRain.toFixed(2) + ' in (last ~6h)',
         todayHigh: todayHigh + '°F',
         todayLow: todayLow + '°F',
-        lastRainHoursAgo,
+        lastRainForecast: lastRainHoursAgo,
         trailConditionScore,
         trailConditionText,
         lastUpdated: new Date().toISOString()
